@@ -21,7 +21,7 @@ external_client = AsyncOpenAI(
 
 # ✅ Gemini wrapped as OpenAI model
 model = OpenAIChatCompletionsModel(
-    model="gemini-2.0-pro",
+    model="gemini-2.0-flash",
     openai_client=external_client,
 )
 
@@ -35,37 +35,41 @@ config = RunConfig(
 # ✅ A tool to be used by the agent
 @function_tool
 def get_weather(city: str) -> str:
+    """
+    Retrieves the current weather for a specified city.
+    Args:
+        city (str): The name of the city.
+    Returns:
+        str: A string indicating the weather in the city.
+    """
     return f"The weather in {city} is sunny."
-
-# ✅ Dynamic instructions based on metadata
-def get_instructions() -> str:
-    user_role = context.metadata.get("user_role", "guest")
-
-    if user_role == "student":
-        return "You're a weather tutor. Explain how to use the get_weather tool step by step."
-    elif user_role == "developer":
-        return "You're a code-savvy assistant. Use the get_weather tool and explain how it works."
-    else:
-        return "You're a friendly assistant. Use the get_weather tool to help the user."
-
-# ✅ Create the agent
-agent = Agent(
-    name="GeminiAssistant",
-    model=model,
-    tools=[get_weather],
-    instructions=get_instructions,  # <== DYNAMIC
-)
 
 # ✅ Choose user role dynamically
 user_role = input("Enter user role (student/developer/guest): ").strip().lower()
 user_input = input("Ask something like 'What is the weather in Lahore?': ")
 
-# ✅ Run agent with context metadata
+# ✅ Determine instructions based on user role before creating the agent
+instructions_text: str
+if user_role == "student":
+    instructions_text = "You're a weather tutor. Explain how to use the get_weather tool step by step."
+elif user_role == "developer":
+    instructions_text = "You're a code-savvy assistant. Use the get_weather tool and explain how it works."
+else:
+    instructions_text = "You're a friendly assistant. Use the get_weather tool to help the user."
+
+# ✅ Create the agent with the pre-determined instructions
+agent = Agent(
+    name="GeminiAssistant",
+    model=model,
+    tools=[get_weather],
+    instructions=instructions_text,  # <== NOW A STATIC STRING
+)
+
+# ✅ Run agent without context metadata
 result = Runner.run_sync(
     agent,
     input=user_input,
-    context=Context(metadata={"user_role": user_role}),
-    config=config,
+    run_config=config,
 )
 
 # ✅ Output
