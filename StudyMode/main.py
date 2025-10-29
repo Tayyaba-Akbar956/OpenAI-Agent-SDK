@@ -1,9 +1,9 @@
 import os
-import asyncio
 from dotenv import load_dotenv
-from agents import Agent, Runner, AsyncOpenAI, OpenAIChatCompletionsModel,SQLiteSession,function_tool
+from agents import Agent, Runner, AsyncOpenAI, OpenAIChatCompletionsModel, SQLiteSession, function_tool
 from agents.run import RunConfig
-import streamlit as st
+from duckduckgo_search import DDGS
+import requests
 
 # Load the environment variables from the .env file
 load_dotenv()
@@ -29,8 +29,9 @@ config = RunConfig(
     model=model,
     model_provider=external_client,
     tracing_disabled=True,
-) 
+)
 
+UPLOADS_DIR = "uploads"
 
 @function_tool()
 def create_quiz(topic: str, num_questions: int = 5, question_type: str = "multiple_choice") -> str:
@@ -62,7 +63,7 @@ def explain_concept(concept: str, level: str = "beginner") -> str:
     """
     levels = {"beginner": "simple terms", "intermediate": "moderate detail", "advanced": "technical depth"}
     style = levels.get(level.lower(), "clear and concise")
-    return f"**Explanation of '{concept}' ({level})**\n\n[Clear explanation in {style}...]\n\n*Ask follow-up questions anytime!*"
+    return f"**Explanation of '{concept}' ({level})**\n\n[Clear explanation in {style}...\n\n*Ask follow-up questions anytime!*"
 
 
 @function_tool()
@@ -84,44 +85,75 @@ def generate_practice_problems(subject: str, difficulty: str = "medium", count: 
     """
     problems = []
     for i in range(1, count + 1):
-        problems.append(f"**Problem {i}** ({difficulty})\n[Problem statement for {subject}...]\n*Solution: [step-by-step]*")
+        problems.append(f"""**Problem {i}** ({difficulty})\n[Problem statement for {subject}...
+*Solution: [step-by-step]*""")
     return f"**Practice Problems: {subject} ({difficulty})**\n\n" + "\n\n".join(problems)
+
+@function_tool()
+def read_uploaded_file(filename: str) -> str:
+    """
+    Reads the content of a file that has been uploaded by the user.
+    Use this tool to access information from user-provided files.
+    """
+    if not os.path.exists(UPLOADS_DIR):
+        return "Error: Uploads directory not found."
+
+    file_path = os.path.join(UPLOADS_DIR, filename)
+
+    if not os.path.exists(file_path):
+        return f"Error: File '{filename}' not found in uploads."
+
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return content
+    except Exception as e:
+        return f"Error reading file: {e}"
 
 agent = Agent(
         name="Study Mode Tutor",
-        instructions="""
+        instructions='''
 You are **Study Mode**, a world-class tutor like ChatGPT in Study Mode.
 
 Your job:
 - Answer questions clearly.
 - Use tools when the user asks to **create quizzes, explain concepts, make flashcards, or generate practice problems**.
+- You can also **search the web** for topics you don't know about to provide the most up-to-date information.
+- You can **read files** that the user has uploaded. Use the `read_uploaded_file` tool for this.
 - Always be encouraging, structured, and interactive.
 - If the user says "quiz me on X", call `create_quiz`.
 - If they say "explain Y simply", call `explain_concept`.
-- Never hallucinate answers – if unsure, say so.
+- If they ask for recent information or something you are not sure about, use `web_search`.
+- If the user asks a question about a file they uploaded, use `read_uploaded_file`.
+- Never hallucinate answers – if unsure, say so or use the web search tool.
 
 Examples:
   • "Make a 5-question Python quiz" → call `create_quiz`
   • "Explain photosynthesis for beginners" → call `explain_concept`
   • "Give me 3 hard calculus problems" → call `generate_practice_problems`
-""",
+  • "What are the latest advancements in AI?" → call `web_search`
+  • "Summarize the document 'my_doc.txt' that I uploaded." → call `read_uploaded_file(filename='my_doc.txt')`
+''',
         model=model,
-        tools=[create_quiz, explain_concept, create_flashcards, generate_practice_problems]
+        tools=[create_quiz, explain_concept, create_flashcards, generate_practice_problems, read_uploaded_file]
     )
 
     # Optional: keep conversation history
 session = SQLiteSession("study_session_123")
 
-print("Study Mode Active! Ask anything (type 'quit' to exit)\n")
-while True:
-        user_input = input("You: ").strip()
-        if user_input.lower() in ["quit", "exit", "bye"]:
-            print("Tutor: Goodbye! Keep studying!")
-            break
-        if not user_input:
-            continue
+def main():
+    print("Study Mode Active! Ask anything (type 'quit' to exit)\n")
+    while True:
+            user_input = input("You: ").strip()
+            if user_input.lower() in ["quit", "exit", "bye"]:
+                print("Tutor: Goodbye! Keep studying!")
+                break
+            if not user_input:
+                continue
 
-        print("\nThinking...\n")
-        result = Runner.run_sync(agent, user_input, run_config=config, session=session)
-        print(f"Tutor: {result.final_output}\n")
+            print("\nThinking...\n")
+            result = Runner.run_sync(agent, user_input, run_config=config, session=session)
+            print(f"Tutor: {result.final_output}\n")
 
+if __name__ == "__main__":
+    main()
