@@ -1,0 +1,13 @@
+[project]
+name = "studymode"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "openai-agents>=0.4.2",
+    "python-dotenv>=1.0.0",
+    "streamlit>=1.28.0",
+    "duckduckgo-search>=4.2",
+    "requests>=2.32.5",
+]
